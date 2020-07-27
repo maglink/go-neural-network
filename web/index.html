@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Network</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<script type="module">
+    import * as THREE from './node_modules/three/build/three.module.js';
+    import { OrbitControls } from './node_modules/three/examples/jsm/controls/OrbitControls.js';
+    import { Line2 } from './node_modules/three/examples/jsm/lines/Line2.js';
+    import { LineMaterial } from './node_modules/three/examples/jsm/lines/LineMaterial.js';
+    import { LineGeometry } from './node_modules/three/examples/jsm/lines/LineGeometry.js';
+
+    var renderer = new THREE.WebGLRenderer( { antialias: true } );
+    renderer.setPixelRatio( window.devicePixelRatio );
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    document.body.appendChild( renderer.domElement );
+
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color( 0xbfe3dd );
+
+    var camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 1000 );
+    var controls = new OrbitControls( camera, renderer.domElement );
+
+    var light = new THREE.AmbientLight( 0x404040 ); // soft white light
+    scene.add( light );
+
+    var dirLight = new THREE.DirectionalLight( 0xffffff, 0.5 );
+    dirLight.position.set( 5, 2, 8 );
+    scene.add( dirLight );
+
+    camera.position.set( 0, 0, 40 );
+    controls.enablePan = false;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = -0.2;
+    controls.update();
+
+    function animate() {
+        requestAnimationFrame( animate );
+        controls.update();
+        renderer.render( scene, camera );
+    }
+    animate();
+
+    (function() {
+        if (!("WebSocket" in window)) {
+            console.log("WebSocket is not supported by your Browser!");
+            return;
+        }
+        var ws = new WebSocket("ws://localhost:3000/network");
+        ws.onmessage = function (evt) {
+            var network = JSON.parse(evt.data);
+            drawNetwork(network);
+        };
+        ws.onclose = function() {
+            console.log("connection is lost")
+        };
+    })()
+
+    let nodes = {}
+    let links = {}
+
+    function drawNetwork(network) {
+        console.log(network)
+
+        let layerGap = 8
+        let shift = -1 * (network.layers.length-1) * layerGap/2
+        for(let layerNum in network.layers) {
+            buildLayer(network.layers[layerNum], shift+layerNum*layerGap);
+        }
+
+        for(let layerNum in network.layers) {
+            setLinks(network.layers[layerNum]);
+        }
+    }
+
+    function setLinks(layer) {
+        for(let node of layer.nodes) {
+            if(!node.links){
+                continue;
+            }
+            for(let link of node.links) {
+                if(!nodes[link.from] || !nodes[link.to]) {
+                    continue;
+                }
+                links[link.from + "|" + link.to] = addLink(nodes[link.from], nodes[link.to], link.weight)
+            }
+        }
+    }
+
+    function buildLayer(layer, xPos) {
+        let nodeGap = 3
+        let maxRowSize = 16
+        let rowSize = Math.ceil(Math.sqrt(layer.nodes.length)) < maxRowSize ? Math.ceil(Math.sqrt(layer.nodes.length)) : maxRowSize
+        if(rowSize < 2) {
+            rowSize = 2
+        }
+
+        let zRowSize = Math.ceil(layer.nodes.length / rowSize)
+        let zShift = zRowSize * nodeGap/2
+
+        let shift = -rowSize * nodeGap/2
+        let y = 0
+        let z = 0
+
+        for(let node of layer.nodes) {
+            if(y >= rowSize) {
+                y = 0;
+                z++;
+            }
+            nodes[node.id] = addNode(xPos, shift+(y++)*nodeGap, zShift+(-z*nodeGap))
+        }
+    }
+
+    function addNode(x, y, z) {
+        var geometry = new THREE.SphereGeometry(0.8, 16, 16);
+        var material = new THREE.MeshStandardMaterial( { color: 0x666666 } );
+        var node = new THREE.Mesh( geometry, material );
+        node.position.set(x, y, z)
+        scene.add( node );
+        return node
+    }
+
+    function addLink(node1, node2, weight) {
+        var material = new LineMaterial({
+            color: 0x000000,
+            linewidth: 0.002 * weight*weight*weight*weight,
+        });
+
+        var geometry = new LineGeometry();
+        geometry.setPositions( [
+            node1.position.x,
+            node1.position.y,
+            node1.position.z,
+            node2.position.x,
+            node2.position.y,
+            node2.position.z,
+        ] );
+
+        var line = new Line2( geometry, material );
+        scene.add( line );
+
+        return line
+    }
+
+</script>
+</body>
+</html>
