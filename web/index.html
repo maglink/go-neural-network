@@ -30,13 +30,13 @@
     var light = new THREE.AmbientLight( 0x404040 ); // soft white light
     scene.add( light );
 
-    var dirLight = new THREE.DirectionalLight( 0xffffff, 0.5 );
+    /*var dirLight = new THREE.DirectionalLight( 0xffffff, 0.5 );
     dirLight.position.set( 5, 2, 8 );
-    scene.add( dirLight );
+    scene.add( dirLight );*/
 
-    camera.position.set( 0, 0, 40 );
+    camera.position.set( 0, 0, 100 );
     controls.enablePan = false;
-    controls.autoRotate = true;
+    controls.autoRotate = false;
     controls.autoRotateSpeed = -0.2;
     controls.update();
 
@@ -47,6 +47,19 @@
     }
     animate();
 
+    let maxLinksPerLayer = 200
+    let layerLinksCount = {}
+
+    let drew = false
+    let nodes = {};
+    let links = {};
+
+    let intervalBacklight = setInterval(function () {
+        for(let linkKey in links) {
+            links[linkKey].material.color.multiplyScalar(0.9);
+        }
+    }, 150);
+
     (function() {
         if (!("WebSocket" in window)) {
             console.log("WebSocket is not supported by your Browser!");
@@ -54,19 +67,45 @@
         }
         var ws = new WebSocket("ws://localhost:3000/network");
         ws.onmessage = function (evt) {
-            var network = JSON.parse(evt.data);
-            drawNetwork(network);
+            let network = JSON.parse(evt.data);
+            if(!drew) {
+                drew = true
+                drawNetwork(network);
+            } else {
+                updateNetwork(network);
+            }
         };
         ws.onclose = function() {
             console.log("connection is lost")
         };
     })()
 
-    let nodes = {}
-    let links = {}
+    function updateNetwork(network) {
+        for(let layerNum in network.layers) {
+            updateLayer(network.layers[layerNum])
+        }
+    }
+
+    function updateLayer(layer) {
+        for(let node of layer.nodes) {
+            if (!node.links) {
+                continue;
+            }
+            for(let link of node.links) {
+                let linkObject = links[link.from + "|" + link.to]
+                if(linkObject) {
+                    if(Math.abs(linkObject.lastWeight - link.weight) > 0.1) {
+                        linkObject.material.color.setHex( 0xff0000 )
+                        linkObject.material.linewidth = getLineWidth(link.weight)
+                        linkObject.lastWeight = link.weight
+                    }
+                }
+            }
+        }
+    }
 
     function drawNetwork(network) {
-        console.log(network)
+        console.log("network", network)
 
         let layerGap = 8
         let shift = -1 * (network.layers.length-1) * layerGap/2
@@ -75,13 +114,20 @@
         }
 
         for(let layerNum in network.layers) {
-            setLinks(network.layers[layerNum]);
+            setLinks(layerNum, network.layers[layerNum]);
         }
     }
 
-    function setLinks(layer) {
+    function setLinks(layerNum, layer) {
         for(let node of layer.nodes) {
-            if(!node.links){
+            if(!layerLinksCount[layerNum]) {
+                layerLinksCount[layerNum] = 0
+            }
+            if (layerLinksCount[layerNum] >= maxLinksPerLayer) {
+                break
+            }
+            layerLinksCount[layerNum]++
+            if(!node.links) {
                 continue;
             }
             for(let link of node.links) {
@@ -91,6 +137,10 @@
                 links[link.from + "|" + link.to] = addLink(nodes[link.from], nodes[link.to], link.weight)
             }
         }
+    }
+
+    function randomDeviation() {
+        return (0.5 - Math.random()) * 3
     }
 
     function buildLayer(layer, xPos) {
@@ -129,7 +179,7 @@
     function addLink(node1, node2, weight) {
         var material = new LineMaterial({
             color: 0x000000,
-            linewidth: 0.002 * weight*weight*weight*weight,
+            linewidth: getLineWidth(weight),
         });
 
         var geometry = new LineGeometry();
@@ -144,8 +194,43 @@
 
         var line = new Line2( geometry, material );
         scene.add( line );
+        line.lastWeight = weight;
 
         return line
+    }
+
+    function getLineWidth(weight) {
+        let r = 0.002 * weight*weight*weight*weight;
+        if (r < 0.0001) {
+            return 0.0001;
+        } else if (r < 0.0002) {
+            return 0.0002;
+        }else if (r < 0.0003) {
+            return 0.0003;
+        }else if (r < 0.0004) {
+            return 0.0004;
+        }else if (r < 0.0005) {
+            return 0.0005;
+        }else if (r < 0.0006) {
+            return 0.0006;
+        }else if (r < 0.0007) {
+            return 0.0007;
+        }else if (r < 0.0008) {
+            return 0.0008;
+        }else if (r < 0.0009) {
+            return 0.0009;
+        }else if (r < 0.001) {
+            return 0.001;
+        }else if (r < 0.0012) {
+            return 0.0012;
+        }else if (r < 0.0014) {
+            return 0.0014;
+        }else if (r < 0.0016) {
+            return 0.0016;
+        }else if (r < 0.0018) {
+            return 0.0018;
+        }
+        return 0.002;
     }
 
 </script>

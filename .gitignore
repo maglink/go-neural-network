@@ -1,3 +1,4 @@
 examples/simple/simple_example
 examples/web-explorer/web_explorer
 web/node_modules
+*-ubyte*
